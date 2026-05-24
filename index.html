@@ -27,9 +27,9 @@
 <body>
     <div id="info">对准识别图，查看 AR 效果</div>
     
-    <a-scene mindar-image="imageTargetSrc: targets.mind; maxTrack: 3;" 
+    <a-scene mindar-image="imageTargetSrc: targets.mind; maxTrack: 6; filterMinCF: 0.001; filterBeta: 0.001;" 
              color-space="sRGB" 
-             renderer="colorManagement: true, physicallyCorrectLights" 
+             renderer="colorManagement: true, physicallyCorrectLights, antialias: true; pixelRatio: 2;" 
              vr-mode-ui="enabled: false" 
              device-orientation-permission-ui="enabled: false">
         
