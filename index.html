@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>物理实验 AR</title>
+    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        #info {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">对准识别图，查看 AR 效果</div>
+    
+    <a-scene mindar-image="imageTargetSrc: targets.mind; maxTrack: 3;" 
+             color-space="sRGB" 
+             renderer="colorManagement: true, physicallyCorrectLights" 
+             vr-mode-ui="enabled: false" 
+             device-orientation-permission-ui="enabled: false">
+        
+        <a-assets>
+            <!-- 3D 模型（暂时用简单几何体代替，之后替换为 .glb 模型） -->
+        </a-assets>
+
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+        <!-- 识别图 0: Astronaut -->
+        <a-entity mindar-image-target="targetIndex: 0">
+            <a-box position="0 0.1 0" rotation="0 45 0" scale="0.1 0.1 0.1" 
+                   color="#4CC3D9" 
+                   animation="property: rotation; to: 0 405 0; dur: 3000; loop: true; easing: linear">
+            </a-box>
+            <a-text value="宇航员" position="0 -0.15 0" align="center" scale="0.3 0.3 0.3" color="white"></a-text>
+        </a-entity>
+
+        <!-- 识别图 1: Circuit -->
+        <a-entity mindar-image-target="targetIndex: 1">
+            <a-sphere position="0 0.1 0" radius="0.08" 
+                      color="#EF2D5E" 
+                      animation="property: scale; to: 1.2 1.2 1.2; dur: 1000; dir: alternate; loop: true; easing: easeInOutQuad">
+            </a-sphere>
+            <a-text value="电路板" position="0 -0.15 0" align="center" scale="0.3 0.3 0.3" color="white"></a-text>
+        </a-entity>
+
+        <!-- 识别图 2: Architecture -->
+        <a-entity mindar-image-target="targetIndex: 2">
+            <a-cylinder position="0 0.1 0" radius="0.06" height="0.15" 
+                        color="#FFC65D" 
+                        animation="property: rotation; to: 0 360 0; dur: 2000; loop: true; easing: linear">
+            </a-cylinder>
+            <a-text value="建筑" position="0 -0.15 0" align="center" scale="0.3 0.3 0.3" color="white"></a-text>
+        </a-entity>
+
+        <!-- 识别图 3: Book -->
+        <a-entity mindar-image-target="targetIndex: 3">
+            <a-torus position="0 0.1 0" radius="0.06" radius-tubular="0.02" 
+                     color="#7B9759" 
+                     animation="property: rotation; to: 360 360 0; dur: 3000; loop: true; easing: linear">
+            </a-torus>
+            <a-text value="书籍" position="0 -0.15 0" align="center" scale="0.3 0.3 0.3" color="white"></a-text>
+        </a-entity>
+
+        <!-- 识别图 4: Magazine -->
+        <a-entity mindar-image-target="targetIndex: 4">
+            <a-octahedron position="0 0.1 0" radius="0.08" 
+                          color="#F16745" 
+                          animation="property: rotation; to: 0 360 360; dur: 2500; loop: true; easing: linear">
+            </a-octahedron>
+            <a-text value="杂志" position="0 -0.15 0" align="center" scale="0.3 0.3 0.3" color="white"></a-text>
+        </a-entity>
+
+        <!-- 识别图 5: Artwork -->
+        <a-entity mindar-image-target="targetIndex: 5">
+            <a-tetrahedron position="0 0.1 0" radius="0.08" 
+                           color="#9C27B0" 
+                           animation="property: position; to: 0 0.2 0; dur: 1500; dir: alternate; loop: true; easing: easeInOutQuad">
+            </a-tetrahedron>
+            <a-text value="艺术" position="0 -0.15 0" align="center" scale="0.3 0.3 0.3" color="white"></a-text>
+        </a-entity>
+    </a-scene>
+</body>
+</html>
