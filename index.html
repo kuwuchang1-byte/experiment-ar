@@ -260,6 +260,8 @@
                 this.farObjs = [];
                 this.posA = new THREE.Vector3();
                 this.posB = new THREE.Vector3();
+                this.screenA = new THREE.Vector3();
+                this.screenB = new THREE.Vector3();
                 this.modelLoaded = false;
                 this.distHistory = [];
                 this.smoothDist = Infinity;
@@ -332,16 +334,23 @@
                     this.data.otherCoilModel.object3D.updateMatrixWorld(true);
                     this.data.coilModel.object3D.getWorldPosition(this.posA);
                     this.data.otherCoilModel.object3D.getWorldPosition(this.posB);
-                    rawDist = this.posA.distanceTo(this.posB);
+                    // 投影到屏幕像素坐标
+                    const cam = this.el.sceneEl.camera;
+                    this.screenA.copy(this.posA).project(cam);
+                    this.screenB.copy(this.posB).project(cam);
+                    const w = window.innerWidth;
+                    const h = window.innerHeight;
+                    const ax = (this.screenA.x + 1) * w / 2;
+                    const ay = (-this.screenA.y + 1) * h / 2;
+                    const bx = (this.screenB.x + 1) * w / 2;
+                    const by = (-this.screenB.y + 1) * h / 2;
+                    rawDist = Math.sqrt((ax - bx) ** 2 + (ay - by) ** 2);
                 }
-                // 异常值门限：新值偏离当前平滑值超过 40% 就丢弃（其他识别图干扰）
-                if (rawDist > 0 && rawDist < 5000) {
-                    if (this.smoothDist < 100 || Math.abs(rawDist - this.smoothDist) / this.smoothDist < 0.4) {
-                        this.distHistory.push(rawDist);
-                        if (this.distHistory.length > 15) this.distHistory.shift();
-                    }
+                // 用屏幕像素距离，不受其他目标干扰
+                if (rawDist > 0 && rawDist < 10000) {
+                    this.distHistory.push(rawDist);
+                    if (this.distHistory.length > 8) this.distHistory.shift();
                 }
-                // 滑动平均
                 if (this.distHistory.length > 0) {
                     this.smoothDist = this.distHistory.reduce((a, b) => a + b, 0) / this.distHistory.length;
                 }
@@ -447,8 +456,8 @@
             nearNames: 磁感线3,磁感线4;
             farNames: 磁感线5,磁感线6;
             otherCoilModel: #model-coil-transmit;
-            nearDist: 500;
-            farDist: 900;
+            nearDist: 300;
+            farDist: 600;
             defaultOn: true;
         ">
             <a-gltf-model id="model-coil-receive" src="#asset-coil-receive" position="0 0 0" scale="0.12 0.12 0.12"></a-gltf-model>
