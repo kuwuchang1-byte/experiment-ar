@@ -23,6 +23,11 @@
             z-index: 1000;
             line-height: 1.45;
         }
+        #status {
+            margin-top: 4px;
+            color: #ffd36a;
+            font-size: 12px;
+        }
     </style>
     <script>
         // 跨识别图动态导线组件：读取 Blender 导出的空物体接线点，并用 TubeGeometry 生成有宽度导线。
@@ -151,7 +156,11 @@
     </script>
 </head>
 <body>
-    <div id="info">对准识别图，查看 AR 模型效果<br>图5、图6 暂时留空</div>
+    <div id="info">
+        对准识别图，查看 AR 模型效果<br>
+        1接收 2空 3电源 4黑箱2 5发射 6空
+        <div id="status">已识别：无</div>
+    </div>
     
     <a-scene mindar-image="imageTargetSrc: targets.mind; maxTrack: 6; filterMinCF: 0.001; filterBeta: 0.001;" 
              color-space="sRGB" 
@@ -188,13 +197,13 @@
             <a-gltf-model id="model-box-receive" src="#asset-box-receive" position="0 0 0" scale="0.27 0.27 0.27"></a-gltf-model>
         </a-entity>
 
-        <!-- 实测 targetIndex 4: 暂时留空 -->
-        <a-entity id="target-empty-4" mindar-image-target="targetIndex: 4"></a-entity>
-
-        <!-- 实测 targetIndex 5: 发射线圈 -->
-        <a-entity id="target-coil-transmit" mindar-image-target="targetIndex: 5">
+        <!-- 实测编号 5 / targetIndex 4: 发射线圈 -->
+        <a-entity id="target-coil-transmit" mindar-image-target="targetIndex: 4">
             <a-gltf-model id="model-coil-transmit" src="#asset-coil-transmit" position="0 0 0" scale="0.09 0.09 0.09"></a-gltf-model>
         </a-entity>
+
+        <!-- 实测编号 6 / targetIndex 5: 暂时留空 -->
+        <a-entity id="target-empty-5" mindar-image-target="targetIndex: 5"></a-entity>
 
         <!-- 动态导线：发射端红线，黑箱输出+ -> 发射线圈输入 -->
         <a-entity ar-wire="
@@ -252,5 +261,29 @@
             updateInterval: 10;
         "></a-entity>
     </a-scene>
+    <script>
+        // 手机端调试提示：显示当前 MindAR 实际识别到的编号，方便判断连线是否具备显示条件。
+        window.addEventListener('DOMContentLoaded', function () {
+            const labels = {
+                'target-coil-receive': '1接收',
+                'target-empty-1': '2空',
+                'target-box-transmit': '3电源',
+                'target-box-receive': '4黑箱2',
+                'target-coil-transmit': '5发射',
+                'target-empty-5': '6空'
+            };
+            const found = new Set();
+            const status = document.getElementById('status');
+            const update = () => {
+                status.textContent = '已识别：' + (found.size ? Array.from(found).join('、') : '无');
+            };
+            Object.keys(labels).forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener('targetFound', () => { found.add(labels[id]); update(); });
+                el.addEventListener('targetLost', () => { found.delete(labels[id]); update(); });
+            });
+        });
+    </script>
 </body>
 </html>
