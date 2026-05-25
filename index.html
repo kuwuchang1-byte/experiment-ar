@@ -206,12 +206,115 @@
                 if (this.endSphere) { this.endSphere.geometry.dispose(); this.sphereMaterial.dispose(); }
             }
         });
+
+        // 磁感线显隐控制组件：根据两线圈距离 + 点击切换，控制磁感线可见性
+        AFRAME.registerComponent('ar-mf-control', {
+            schema: {
+                coilModel: { type: 'selector' },           // 本线圈模型
+                showNames: { type: 'string', default: '' },  // 始终显示的磁感线名（逗号分隔）
+                nearNames: { type: 'string', default: '' },  // 近距离显示
+                farNames: { type: 'string', default: '' },   // 远距离显示
+                otherCoilModel: { type: 'selector' },        // 另一个线圈（用于算距离）
+                nearDist: { type: 'number', default: 0.3 },  // R+2r 阈值
+                farDist: { type: 'number', default: 0.8 },   // 最远显示距离
+                defaultOn: { type: 'boolean', default: true },
+                updateInterval: { type: 'number', default: 8 }
+            },
+
+            init: function () {
+                this.frameCount = 0;
+                this.userToggle = this.data.defaultOn;
+                this.allMf = [];
+                this.showObjs = [];
+                this.nearObjs = [];
+                this.farObjs = [];
+                this.posA = new THREE.Vector3();
+                this.posB = new THREE.Vector3();
+                this.modelLoaded = false;
+
+                // 模型加载后查找磁感线对象
+                this.el.addEventListener('model-loaded', () => this._findObjects());
+                setTimeout(() => this._findObjects(), 800);
+
+                // 点击切换
+                this.el.addEventListener('click', () => {
+                    this.userToggle = !this.userToggle;
+                    console.log('[mf-control] toggle:', this.userToggle);
+                });
+            },
+
+            _findObjects: function () {
+                const model = this.data.coilModel;
+                if (!model || !model.object3D) return;
+                model.object3D.updateMatrixWorld(true);
+
+                const parse = (s) => s.split(',').map(n => n.trim()).filter(n => n);
+                const find = (names) => {
+                    const result = [];
+                    names.forEach(name => {
+                        const obj = model.object3D.getObjectByName(name);
+                        if (obj) { result.push(obj); console.log('[mf-control] found:', name); }
+                        else { console.warn('[mf-control] NOT found:', name); }
+                    });
+                    return result;
+                };
+
+                this.showObjs = find(parse(this.data.showNames));
+                this.nearObjs = find(parse(this.data.nearNames));
+                this.farObjs = find(parse(this.data.farNames));
+                this.allMf = [...this.showObjs, ...this.nearObjs, ...this.farObjs];
+                this.modelLoaded = this.allMf.length > 0;
+
+                // 初始隐藏所有磁感线，等 tick 根据距离决定
+                this.allMf.forEach(o => o.visible = false);
+            },
+
+            tick: function () {
+                this.frameCount++;
+                if (this.frameCount % this.data.updateInterval !== 0) return;
+                if (!this.modelLoaded) return;
+
+                // 计算距离
+                let dist = Infinity;
+                if (this.data.coilModel && this.data.otherCoilModel) {
+                    this.data.coilModel.object3D.updateMatrixWorld(true);
+                    this.data.otherCoilModel.object3D.updateMatrixWorld(true);
+                    this.data.coilModel.object3D.getWorldPosition(this.posA);
+                    this.data.otherCoilModel.object3D.getWorldPosition(this.posB);
+                    dist = this.posA.distanceTo(this.posB);
+                }
+
+                // 用户关闭了
+                if (!this.userToggle) {
+                    this.allMf.forEach(o => o.visible = false);
+                    return;
+                }
+
+                // 始终显示的
+                this.showObjs.forEach(o => o.visible = true);
+
+                // 近/远距离切换
+                if (this.nearObjs.length || this.farObjs.length) {
+                    if (dist < this.data.nearDist) {
+                        this.nearObjs.forEach(o => o.visible = true);
+                        this.farObjs.forEach(o => o.visible = false);
+                    } else if (dist < this.data.farDist) {
+                        this.nearObjs.forEach(o => o.visible = false);
+                        this.farObjs.forEach(o => o.visible = true);
+                    } else {
+                        this.nearObjs.forEach(o => o.visible = false);
+                        this.farObjs.forEach(o => o.visible = false);
+                    }
+                }
+            }
+        });
     </script>
 </head>
 <body>
     <div id="info">
         对准识别图，查看 AR 模型效果<br>
         1接收 2空 3电源 4黑箱2 5发射 6空
+        点击线圈可切换磁感线显隐
         <div id="status">已识别：无</div>
     </div>
     
@@ -226,15 +329,23 @@
             <a-asset-item id="asset-coil-transmit" src="Model/发射线圈.glb"></a-asset-item>
             <a-asset-item id="asset-coil-receive" src="Model/接收线圈.glb"></a-asset-item>
             <a-asset-item id="asset-box-receive" src="Model/黑箱2.glb"></a-asset-item>
-            <a-asset-item id="asset-mf-test" src="Model/磁感线test1.glb"></a-asset-item>
+
         </a-assets>
 
-        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+        <a-camera position="0 0 0" look-controls="enabled: false" cursor="rayOrigin: mouse" raycaster="objects: .clickable"></a-camera>
         <a-light type="ambient" color="#ffffff" intensity="0.85"></a-light>
         <a-light type="directional" color="#ffffff" intensity="0.65" position="0 1 1"></a-light>
 
         <!-- 实测 targetIndex 0: 接收线圈 -->
-        <a-entity id="target-coil-receive" mindar-image-target="targetIndex: 0">
+        <a-entity id="target-coil-receive" mindar-image-target="targetIndex: 0" class="clickable" ar-mf-control="
+            coilModel: #model-coil-receive;
+            nearNames: 磁感线3,磁感线4;
+            farNames: 磁感线5,磁感线6;
+            otherCoilModel: #model-coil-transmit;
+            nearDist: 0.3;
+            farDist: 0.8;
+            defaultOn: true;
+        ">
             <a-gltf-model id="model-coil-receive" src="#asset-coil-receive" position="0 0 0" scale="0.12 0.12 0.12"></a-gltf-model>
         </a-entity>
 
@@ -252,14 +363,16 @@
         </a-entity>
 
         <!-- 实测编号 5 / targetIndex 4: 发射线圈 -->
-        <a-entity id="target-coil-transmit" mindar-image-target="targetIndex: 4">
+        <a-entity id="target-coil-transmit" mindar-image-target="targetIndex: 4" class="clickable" ar-mf-control="
+            coilModel: #model-coil-transmit;
+            showNames: 磁感线1,磁感线2;
+            otherCoilModel: #model-coil-receive;
+            defaultOn: true;
+        ">
             <a-gltf-model id="model-coil-transmit" src="#asset-coil-transmit" position="0 0 0" scale="0.09 0.09 0.09"></a-gltf-model>
         </a-entity>
 
-        <!-- 实测编号 6 / targetIndex 5: 磁感线测试 -->
-        <a-entity id="target-mf-test" mindar-image-target="targetIndex: 5">
-            <a-gltf-model id="model-mf-test" src="#asset-mf-test" position="0 0 0" scale="0.09 0.09 0.09"></a-gltf-model>
-        </a-entity>
+
 
         <!-- 动态导线：发射端红线，黑箱输出+ -> 发射线圈输入 -->
         <a-entity ar-wire="
@@ -326,7 +439,7 @@
                 'target-box-transmit': '3电源',
                 'target-box-receive': '4黑箱2',
                 'target-coil-transmit': '5发射',
-                'target-mf-test': '6磁感线'
+                'target-empty-5': '6空'
             };
             const found = new Set();
             const status = document.getElementById('status');
