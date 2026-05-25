@@ -226,6 +226,7 @@
             <a-asset-item id="asset-coil-transmit" src="Model/发射线圈.glb"></a-asset-item>
             <a-asset-item id="asset-coil-receive" src="Model/接收线圈.glb"></a-asset-item>
             <a-asset-item id="asset-box-receive" src="Model/黑箱2.glb"></a-asset-item>
+            <a-asset-item id="asset-mf-test" src="Model/磁感线test1.glb"></a-asset-item>
         </a-assets>
 
         <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
@@ -250,9 +251,10 @@
             <a-gltf-model id="model-box-receive" src="#asset-box-receive" position="0 0 0" scale="0.27 0.27 0.27"></a-gltf-model>
         </a-entity>
 
-        <!-- 实测编号 5 / targetIndex 4: 发射线圈 -->
+        <!-- 实测编号 5 / targetIndex 4: 发射线圈 + 磁感线测试 -->
         <a-entity id="target-coil-transmit" mindar-image-target="targetIndex: 4">
             <a-gltf-model id="model-coil-transmit" src="#asset-coil-transmit" position="0 0 0" scale="0.09 0.09 0.09"></a-gltf-model>
+            <a-gltf-model id="model-mf-test" src="#asset-mf-test" position="0 0 0" scale="0.09 0.09 0.09"></a-gltf-model>
         </a-entity>
 
         <!-- 实测编号 6 / targetIndex 5: 暂时留空 -->
