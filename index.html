@@ -261,6 +261,8 @@
                 this.posA = new THREE.Vector3();
                 this.posB = new THREE.Vector3();
                 this.modelLoaded = false;
+                this.distHistory = [];
+                this.smoothDist = Infinity;
 
                 // 模型加载后查找磁感线对象（带重试）
                 this.el.addEventListener('model-loaded', () => this._findObjects());
@@ -323,15 +325,25 @@
                 if (this.frameCount % this.data.updateInterval !== 0) return;
                 if (!this.modelLoaded) return;
 
-                // 计算距离
-                let dist = Infinity;
+                // 计算距离 + 滑动平均滤波
+                let rawDist = Infinity;
                 if (this.data.coilModel && this.data.otherCoilModel) {
                     this.data.coilModel.object3D.updateMatrixWorld(true);
                     this.data.otherCoilModel.object3D.updateMatrixWorld(true);
                     this.data.coilModel.object3D.getWorldPosition(this.posA);
                     this.data.otherCoilModel.object3D.getWorldPosition(this.posB);
-                    dist = this.posA.distanceTo(this.posB);
+                    rawDist = this.posA.distanceTo(this.posB);
                 }
+                // 只记录有效距离，排除异常值
+                if (rawDist < 5000 && rawDist > 0) {
+                    this.distHistory.push(rawDist);
+                    if (this.distHistory.length > 10) this.distHistory.shift();
+                }
+                // 滑动平均
+                if (this.distHistory.length > 0) {
+                    this.smoothDist = this.distHistory.reduce((a, b) => a + b, 0) / this.distHistory.length;
+                }
+                const dist = this.smoothDist;
 
                 // 用户关闭了
                 if (!this.userToggle) {
@@ -450,7 +462,7 @@
 
         <!-- 实测 targetIndex 3: 接收端黑箱 -->
         <a-entity id="target-box-receive" mindar-image-target="targetIndex: 3" ar-sticky-target="holdTime: 2000">
-            <a-gltf-model id="model-box-receive" src="#asset-box-receive" position="0 0 0" scale="0.27 0.27 0.27"></a-gltf-model>
+            <a-gltf-model id="model-box-receive" src="#asset-box-receive" position="0 0 0" scale="0.108 0.108 0.108"></a-gltf-model>
         </a-entity>
 
         <!-- 实测编号 5 / targetIndex 4: 发射线圈 -->
