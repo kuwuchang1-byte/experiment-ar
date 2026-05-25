@@ -334,10 +334,12 @@
                     this.data.otherCoilModel.object3D.getWorldPosition(this.posB);
                     rawDist = this.posA.distanceTo(this.posB);
                 }
-                // 只记录有效距离，排除异常值
-                if (rawDist < 5000 && rawDist > 0) {
-                    this.distHistory.push(rawDist);
-                    if (this.distHistory.length > 10) this.distHistory.shift();
+                // 异常值门限：新值偏离当前平滑值超过 40% 就丢弃（其他识别图干扰）
+                if (rawDist > 0 && rawDist < 5000) {
+                    if (this.smoothDist < 100 || Math.abs(rawDist - this.smoothDist) / this.smoothDist < 0.4) {
+                        this.distHistory.push(rawDist);
+                        if (this.distHistory.length > 15) this.distHistory.shift();
+                    }
                 }
                 // 滑动平均
                 if (this.distHistory.length > 0) {
