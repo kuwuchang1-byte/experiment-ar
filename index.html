@@ -305,7 +305,11 @@
 
                 // 近/远距离切换
                 if (this.nearObjs.length || this.farObjs.length) {
-                    if (dist < this.data.nearDist) {
+                    if (dist === Infinity) {
+                        // 另一个线圈不可见，默认显示近距离磁感线
+                        this.nearObjs.forEach(o => o.visible = true);
+                        this.farObjs.forEach(o => o.visible = false);
+                    } else if (dist < this.data.nearDist) {
                         this.nearObjs.forEach(o => o.visible = true);
                         this.farObjs.forEach(o => o.visible = false);
                     } else if (dist < this.data.farDist) {
@@ -316,6 +320,38 @@
                         this.farObjs.forEach(o => o.visible = false);
                     }
                 }
+            }
+        });
+
+        // 目标粘性保持：target 丢失后保持显示一段时间，避免靠近时互相遮挡导致消失
+        AFRAME.registerComponent('ar-sticky-target', {
+            schema: {
+                holdTime: { type: 'number', default: 3000 }
+            },
+            init: function () {
+                this.lastFound = 0;
+                this.el.addEventListener('targetFound', () => { this.lastFound = Date.now(); });
+            },
+            tick: function () {
+                if (Date.now() - this.lastFound < this.data.holdTime && this.lastFound > 0) {
+                    this.el.object3D.visible = true;
+                }
+            }
+        });
+
+        // 手机端点击目标：在模型上加一个不可见的盒子，让 raycaster 能命中
+        AFRAME.registerComponent('ar-click-target', {
+            schema: {
+                size: { type: 'number', default: 0.6 }
+            },
+            init: function () {
+                const box = document.createElement('a-box');
+                box.setAttribute('width', this.data.size);
+                box.setAttribute('height', this.data.size);
+                box.setAttribute('depth', this.data.size);
+                box.setAttribute('material', 'visible: false');
+                box.setAttribute('class', 'clickable');
+                this.el.appendChild(box);
             }
         });
     </script>
@@ -347,7 +383,7 @@
         <a-light type="directional" color="#ffffff" intensity="0.65" position="0 1 1"></a-light>
 
         <!-- 实测 targetIndex 0: 接收线圈 -->
-        <a-entity id="target-coil-receive" mindar-image-target="targetIndex: 0" class="clickable" ar-mf-control="
+        <a-entity id="target-coil-receive" mindar-image-target="targetIndex: 0" ar-sticky-target="holdTime: 3000" ar-click-target="size: 0.6" ar-mf-control="
             coilModel: #model-coil-receive;
             nearNames: 磁感线3,磁感线4;
             farNames: 磁感线5,磁感线6;
@@ -363,17 +399,17 @@
         <a-entity id="target-empty-1" mindar-image-target="targetIndex: 1"></a-entity>
 
         <!-- 实测 targetIndex 2: 电源 + 发射端黑箱 -->
-        <a-entity id="target-box-transmit" mindar-image-target="targetIndex: 2">
+        <a-entity id="target-box-transmit" mindar-image-target="targetIndex: 2" ar-sticky-target="holdTime: 2000">
             <a-gltf-model id="model-box-transmit" src="#asset-box-transmit" position="0 0 0" scale="0.045 0.045 0.045"></a-gltf-model>
         </a-entity>
 
         <!-- 实测 targetIndex 3: 接收端黑箱 -->
-        <a-entity id="target-box-receive" mindar-image-target="targetIndex: 3">
+        <a-entity id="target-box-receive" mindar-image-target="targetIndex: 3" ar-sticky-target="holdTime: 2000">
             <a-gltf-model id="model-box-receive" src="#asset-box-receive" position="0 0 0" scale="0.27 0.27 0.27"></a-gltf-model>
         </a-entity>
 
         <!-- 实测编号 5 / targetIndex 4: 发射线圈 -->
-        <a-entity id="target-coil-transmit" mindar-image-target="targetIndex: 4" class="clickable" ar-mf-control="
+        <a-entity id="target-coil-transmit" mindar-image-target="targetIndex: 4" ar-sticky-target="holdTime: 3000" ar-click-target="size: 0.6" ar-mf-control="
             coilModel: #model-coil-transmit;
             showNames: 磁感线1,磁感线2;
             otherCoilModel: #model-coil-receive;
