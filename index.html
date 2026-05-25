@@ -28,6 +28,36 @@
             color: #ffd36a;
             font-size: 12px;
         }
+        #mf-debug {
+            margin-top: 4px;
+            color: #88ff88;
+            font-size: 11px;
+        }
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 12px;
+            z-index: 1000;
+        }
+        #controls button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            background: rgba(0,0,0,0.7);
+            color: white;
+        }
+        #controls button.on {
+            background: rgba(50,180,50,0.85);
+        }
+        #controls button.off {
+            background: rgba(180,50,50,0.85);
+        }
     </style>
     <script>
         // 跨识别图动态导线组件 v3：空物体 → 模型中心兜底 + 端点圆球调试 + 明显粗导线
@@ -232,9 +262,14 @@
                 this.posB = new THREE.Vector3();
                 this.modelLoaded = false;
 
-                // 模型加载后查找磁感线对象
+                // 模型加载后查找磁感线对象（带重试）
                 this.el.addEventListener('model-loaded', () => this._findObjects());
-                setTimeout(() => this._findObjects(), 800);
+                this._retryCount = 0;
+                this._retryTimer = setInterval(() => {
+                    if (this.modelLoaded || this._retryCount > 10) { clearInterval(this._retryTimer); return; }
+                    this._findObjects();
+                    this._retryCount++;
+                }, 500);
 
                 // 点击切换
                 this.el.addEventListener('click', () => {
@@ -277,6 +312,10 @@
 
                 // 初始隐藏所有磁感线，等 tick 根据距离决定
                 this.allMf.forEach(o => o.visible = false);
+
+                // 更新调试面板
+                this._label = this.data.showNames ? '发射' : '接收';
+                this._debugEl = document.getElementById('mf-debug');
             },
 
             tick: function () {
@@ -305,11 +344,7 @@
 
                 // 近/远距离切换
                 if (this.nearObjs.length || this.farObjs.length) {
-                    if (dist === Infinity) {
-                        // 另一个线圈不可见，默认显示近距离磁感线
-                        this.nearObjs.forEach(o => o.visible = true);
-                        this.farObjs.forEach(o => o.visible = false);
-                    } else if (dist < this.data.nearDist) {
+                    if (dist < this.data.nearDist) {
                         this.nearObjs.forEach(o => o.visible = true);
                         this.farObjs.forEach(o => o.visible = false);
                     } else if (dist < this.data.farDist) {
@@ -320,6 +355,11 @@
                         this.farObjs.forEach(o => o.visible = false);
                     }
                 }
+
+                // 更新调试面板
+                const visCount = this.allMf.filter(o => o.visible).length;
+                const debugText = this._label + ': 找到' + this.allMf.length + '个, 显示' + visCount + '个, 距离' + dist.toFixed(3);
+                if (this._debugEl && this._label === '接收') this._debugEl.textContent = debugText;
             }
         });
 
@@ -360,8 +400,13 @@
     <div id="info">
         对准识别图，查看 AR 模型效果<br>
         1接收 2空 3电源 4黑箱2 5发射 6空
-        点击线圈可切换磁感线显隐
+        点击下方按钮切换磁感线显隐
         <div id="status">已识别：无</div>
+        <div id="mf-debug">磁感线：加载中...</div>
+    </div>
+    <div id="controls">
+        <button id="btn-transmit" class="on" onclick="window.toggleMf('transmit')">发射磁感线 ON</button>
+        <button id="btn-receive" class="on" onclick="window.toggleMf('receive')">接收磁感线 ON</button>
     </div>
     
     <a-scene mindar-image="imageTargetSrc: targets.mind; maxTrack: 4; filterMinCF: 0.005; filterBeta: 0.005;" 
@@ -477,6 +522,19 @@
         "></a-entity>
     </a-scene>
     <script>
+        // 全局磁感线切换函数
+        window.toggleMf = function (coil) {
+            const id = coil === 'transmit' ? 'target-coil-transmit' : 'target-coil-receive';
+            const el = document.getElementById(id);
+            if (!el || !el.components['ar-mf-control']) return;
+            const comp = el.components['ar-mf-control'];
+            comp.userToggle = !comp.userToggle;
+            const btn = document.getElementById('btn-' + coil);
+            if (btn) {
+                btn.textContent = (coil === 'transmit' ? '发射磁感线 ' : '接收磁感线 ') + (comp.userToggle ? 'ON' : 'OFF');
+                btn.className = comp.userToggle ? 'on' : 'off';
+            }
+        };
         // 手机端调试提示：显示当前 MindAR 实际识别到的编号，方便判断连线是否具备显示条件。
         window.addEventListener('DOMContentLoaded', function () {
             const labels = {
