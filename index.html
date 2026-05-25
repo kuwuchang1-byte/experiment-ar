@@ -15,17 +15,125 @@
             position: fixed;
             top: 10px;
             left: 10px;
-            background: rgba(0,0,0,0.7);
+            background: rgba(0,0,0,0.72);
             color: white;
             padding: 10px 15px;
             border-radius: 8px;
             font-size: 14px;
             z-index: 1000;
+            line-height: 1.45;
         }
     </style>
+    <script>
+        // 跨识别图动态导线组件：读取 Blender 导出的空物体接线点，并用 TubeGeometry 生成有宽度导线。
+        AFRAME.registerComponent('ar-wire', {
+            schema: {
+                fromTarget: { type: 'selector' },
+                toTarget: { type: 'selector' },
+                fromModel: { type: 'selector' },
+                toModel: { type: 'selector' },
+                fromTerminal: { type: 'string' },
+                toTerminal: { type: 'string' },
+                color: { type: 'color', default: '#222222' },
+                radius: { type: 'number', default: 0.006 },
+                sag: { type: 'number', default: 0.035 },
+                segments: { type: 'number', default: 24 },
+                updateInterval: { type: 'number', default: 10 },
+                smooth: { type: 'number', default: 0.35 }
+            },
+
+            init: function () {
+                this.frameCount = 0;
+                this.mesh = null;
+                this.material = new THREE.MeshStandardMaterial({
+                    color: this.data.color,
+                    roughness: 0.85,
+                    metalness: 0.05
+                });
+                this.lastFrom = null;
+                this.lastTo = null;
+                this.tempFrom = new THREE.Vector3();
+                this.tempTo = new THREE.Vector3();
+                this.mid = new THREE.Vector3();
+            },
+
+            tick: function () {
+                this.frameCount++;
+                if (this.frameCount % this.data.updateInterval !== 0) return;
+
+                const fromTarget = this.data.fromTarget;
+                const toTarget = this.data.toTarget;
+                const fromModel = this.data.fromModel;
+                const toModel = this.data.toModel;
+
+                if (!fromTarget || !toTarget || !fromModel || !toModel) {
+                    this.setWireVisible(false);
+                    return;
+                }
+
+                // 两个识别图都被追踪到时才显示导线。
+                if (!fromTarget.object3D.visible || !toTarget.object3D.visible) {
+                    this.setWireVisible(false);
+                    return;
+                }
+
+                fromModel.object3D.updateMatrixWorld(true);
+                toModel.object3D.updateMatrixWorld(true);
+
+                const fromTerminal = fromModel.object3D.getObjectByName(this.data.fromTerminal);
+                const toTerminal = toModel.object3D.getObjectByName(this.data.toTerminal);
+
+                if (!fromTerminal || !toTerminal) {
+                    this.setWireVisible(false);
+                    return;
+                }
+
+                fromTerminal.getWorldPosition(this.tempFrom);
+                toTerminal.getWorldPosition(this.tempTo);
+
+                if (!this.lastFrom) {
+                    this.lastFrom = this.tempFrom.clone();
+                    this.lastTo = this.tempTo.clone();
+                } else {
+                    this.lastFrom.lerp(this.tempFrom, this.data.smooth);
+                    this.lastTo.lerp(this.tempTo, this.data.smooth);
+                }
+
+                this.mid.set(
+                    (this.lastFrom.x + this.lastTo.x) / 2,
+                    (this.lastFrom.y + this.lastTo.y) / 2 + this.data.sag,
+                    (this.lastFrom.z + this.lastTo.z) / 2
+                );
+
+                const curve = new THREE.QuadraticBezierCurve3(this.lastFrom, this.mid, this.lastTo);
+                const geometry = new THREE.TubeGeometry(curve, this.data.segments, this.data.radius, 8, false);
+
+                if (this.mesh) {
+                    this.mesh.geometry.dispose();
+                    this.mesh.geometry = geometry;
+                    this.mesh.visible = true;
+                } else {
+                    this.mesh = new THREE.Mesh(geometry, this.material);
+                    this.mesh.renderOrder = 20;
+                    this.el.object3D.add(this.mesh);
+                }
+            },
+
+            setWireVisible: function (visible) {
+                if (this.mesh) this.mesh.visible = visible;
+            },
+
+            remove: function () {
+                if (this.mesh) {
+                    this.mesh.geometry.dispose();
+                    this.material.dispose();
+                }
+            }
+        });
+    </script>
 </head>
 <body>
-    <div id="info">对准识别图，查看 AR 效果</div>
+    <div id="info">对准识别图，查看 AR 模型效果<br>图5、图6 暂时留空</div>
     
     <a-scene mindar-image="imageTargetSrc: targets.mind; maxTrack: 6; filterMinCF: 0.001; filterBeta: 0.001;" 
              color-space="sRGB" 
@@ -34,64 +142,97 @@
              device-orientation-permission-ui="enabled: false">
         
         <a-assets>
-            <!-- 3D 模型（暂时用简单几何体代替，之后替换为 .glb 模型） -->
+            <a-asset-item id="asset-box-transmit" src="Model/电源+黑箱1.glb"></a-asset-item>
+            <a-asset-item id="asset-coil-transmit" src="Model/发射线圈.glb"></a-asset-item>
+            <a-asset-item id="asset-coil-receive" src="Model/接收线圈.glb"></a-asset-item>
+            <a-asset-item id="asset-box-receive" src="Model/黑箱2.glb"></a-asset-item>
         </a-assets>
 
         <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+        <a-light type="ambient" color="#ffffff" intensity="0.85"></a-light>
+        <a-light type="directional" color="#ffffff" intensity="0.65" position="0 1 1"></a-light>
 
-        <!-- 识别图 0: Astronaut -->
-        <a-entity mindar-image-target="targetIndex: 0">
-            <a-box position="0 0.1 0" rotation="0 45 0" scale="0.1 0.1 0.1" 
-                   color="#4CC3D9" 
-                   animation="property: rotation; to: 0 405 0; dur: 3000; loop: true; easing: linear">
-            </a-box>
-            <a-text value="宇航员" position="0 -0.15 0" align="center" scale="0.3 0.3 0.3" color="white"></a-text>
+        <!-- 识别图 0: 电源 + 发射端黑箱 -->
+        <a-entity id="target-box-transmit" mindar-image-target="targetIndex: 0">
+            <a-gltf-model id="model-box-transmit" src="#asset-box-transmit" position="0 0 0" scale="0.1 0.1 0.1"></a-gltf-model>
         </a-entity>
 
-        <!-- 识别图 1: Circuit -->
-        <a-entity mindar-image-target="targetIndex: 1">
-            <a-sphere position="0 0.1 0" radius="0.08" 
-                      color="#EF2D5E" 
-                      animation="property: scale; to: 1.2 1.2 1.2; dur: 1000; dir: alternate; loop: true; easing: easeInOutQuad">
-            </a-sphere>
-            <a-text value="电路板" position="0 -0.15 0" align="center" scale="0.3 0.3 0.3" color="white"></a-text>
+        <!-- 识别图 1: 发射线圈 -->
+        <a-entity id="target-coil-transmit" mindar-image-target="targetIndex: 1">
+            <a-gltf-model id="model-coil-transmit" src="#asset-coil-transmit" position="0 0 0" scale="0.1 0.1 0.1"></a-gltf-model>
         </a-entity>
 
-        <!-- 识别图 2: Architecture -->
-        <a-entity mindar-image-target="targetIndex: 2">
-            <a-cylinder position="0 0.1 0" radius="0.06" height="0.15" 
-                        color="#FFC65D" 
-                        animation="property: rotation; to: 0 360 0; dur: 2000; loop: true; easing: linear">
-            </a-cylinder>
-            <a-text value="建筑" position="0 -0.15 0" align="center" scale="0.3 0.3 0.3" color="white"></a-text>
+        <!-- 识别图 2: 接收线圈 -->
+        <a-entity id="target-coil-receive" mindar-image-target="targetIndex: 2">
+            <a-gltf-model id="model-coil-receive" src="#asset-coil-receive" position="0 0 0" scale="0.1 0.1 0.1"></a-gltf-model>
         </a-entity>
 
-        <!-- 识别图 3: Book -->
-        <a-entity mindar-image-target="targetIndex: 3">
-            <a-torus position="0 0.1 0" radius="0.06" radius-tubular="0.02" 
-                     color="#7B9759" 
-                     animation="property: rotation; to: 360 360 0; dur: 3000; loop: true; easing: linear">
-            </a-torus>
-            <a-text value="书籍" position="0 -0.15 0" align="center" scale="0.3 0.3 0.3" color="white"></a-text>
+        <!-- 识别图 3: 接收端黑箱 -->
+        <a-entity id="target-box-receive" mindar-image-target="targetIndex: 3">
+            <a-gltf-model id="model-box-receive" src="#asset-box-receive" position="0 0 0" scale="0.1 0.1 0.1"></a-gltf-model>
         </a-entity>
 
-        <!-- 识别图 4: Magazine -->
-        <a-entity mindar-image-target="targetIndex: 4">
-            <a-octahedron position="0 0.1 0" radius="0.08" 
-                          color="#F16745" 
-                          animation="property: rotation; to: 0 360 360; dur: 2500; loop: true; easing: linear">
-            </a-octahedron>
-            <a-text value="杂志" position="0 -0.15 0" align="center" scale="0.3 0.3 0.3" color="white"></a-text>
-        </a-entity>
+        <!-- 识别图 4: 暂时留空 -->
+        <a-entity id="target-empty-4" mindar-image-target="targetIndex: 4"></a-entity>
 
-        <!-- 识别图 5: Artwork -->
-        <a-entity mindar-image-target="targetIndex: 5">
-            <a-tetrahedron position="0 0.1 0" radius="0.08" 
-                           color="#9C27B0" 
-                           animation="property: position; to: 0 0.2 0; dur: 1500; dir: alternate; loop: true; easing: easeInOutQuad">
-            </a-tetrahedron>
-            <a-text value="艺术" position="0 -0.15 0" align="center" scale="0.3 0.3 0.3" color="white"></a-text>
-        </a-entity>
+        <!-- 识别图 5: 暂时留空 -->
+        <a-entity id="target-empty-5" mindar-image-target="targetIndex: 5"></a-entity>
+
+        <!-- 动态导线：发射端红线，黑箱输出+ -> 发射线圈输入 -->
+        <a-entity ar-wire="
+            fromTarget: #target-box-transmit;
+            toTarget: #target-coil-transmit;
+            fromModel: #model-box-transmit;
+            toModel: #model-coil-transmit;
+            fromTerminal: box_transmit_out_red;
+            toTerminal: coil_transmit_in_red;
+            color: #cc2020;
+            radius: 0.006;
+            sag: 0.04;
+            updateInterval: 10;
+        "></a-entity>
+
+        <!-- 动态导线：发射端黑线，黑箱输入- -> 发射线圈输出 -->
+        <a-entity ar-wire="
+            fromTarget: #target-box-transmit;
+            toTarget: #target-coil-transmit;
+            fromModel: #model-box-transmit;
+            toModel: #model-coil-transmit;
+            fromTerminal: box_transmit_in_black;
+            toTerminal: coil_transmit_out_black;
+            color: #111111;
+            radius: 0.006;
+            sag: 0.035;
+            updateInterval: 10;
+        "></a-entity>
+
+        <!-- 动态导线：接收端红线，接收线圈输出 -> 黑箱2正极输入 -->
+        <a-entity ar-wire="
+            fromTarget: #target-coil-receive;
+            toTarget: #target-box-receive;
+            fromModel: #model-coil-receive;
+            toModel: #model-box-receive;
+            fromTerminal: coil_receive_out_red;
+            toTerminal: box_receive_in_red;
+            color: #cc2020;
+            radius: 0.006;
+            sag: 0.04;
+            updateInterval: 10;
+        "></a-entity>
+
+        <!-- 动态导线：接收端黑线，接收线圈输入 -> 黑箱2负极输出 -->
+        <a-entity ar-wire="
+            fromTarget: #target-coil-receive;
+            toTarget: #target-box-receive;
+            fromModel: #model-coil-receive;
+            toModel: #model-box-receive;
+            fromTerminal: coil_receive_in_black;
+            toTerminal: box_receive_out_black;
+            color: #111111;
+            radius: 0.006;
+            sag: 0.035;
+            updateInterval: 10;
+        "></a-entity>
     </a-scene>
 </body>
 </html>
