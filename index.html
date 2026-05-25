@@ -45,10 +45,10 @@
             init: function () {
                 this.frameCount = 0;
                 this.mesh = null;
-                this.material = new THREE.MeshStandardMaterial({
+                this.material = new THREE.MeshBasicMaterial({
                     color: this.data.color,
-                    roughness: 0.85,
-                    metalness: 0.05
+                    depthTest: false,
+                    depthWrite: false
                 });
                 this.lastFrom = null;
                 this.lastTo = null;
@@ -162,7 +162,7 @@
 
         <!-- 实测 targetIndex 2: 电源 + 发射端黑箱 -->
         <a-entity id="target-box-transmit" mindar-image-target="targetIndex: 2">
-            <a-gltf-model id="model-box-transmit" src="#asset-box-transmit" position="0 0 0" scale="0.03 0.03 0.03"></a-gltf-model>
+            <a-gltf-model id="model-box-transmit" src="#asset-box-transmit" position="0 0 0" scale="0.0225 0.0225 0.0225"></a-gltf-model>
         </a-entity>
 
         <!-- 实测 targetIndex 3: 接收端黑箱 -->
@@ -187,7 +187,7 @@
             fromTerminal: box_transmit_out_red;
             toTerminal: coil_transmit_in_red;
             color: #cc2020;
-            radius: 0.006;
+            radius: 0.018;
             sag: 0.04;
             updateInterval: 10;
         "></a-entity>
@@ -201,7 +201,7 @@
             fromTerminal: box_transmit_in_black;
             toTerminal: coil_transmit_out_black;
             color: #111111;
-            radius: 0.006;
+            radius: 0.018;
             sag: 0.035;
             updateInterval: 10;
         "></a-entity>
@@ -215,7 +215,7 @@
             fromTerminal: coil_receive_out_red;
             toTerminal: box_receive_in_red;
             color: #cc2020;
-            radius: 0.006;
+            radius: 0.018;
             sag: 0.04;
             updateInterval: 10;
         "></a-entity>
@@ -229,7 +229,7 @@
             fromTerminal: coil_receive_in_black;
             toTerminal: box_receive_out_black;
             color: #111111;
-            radius: 0.006;
+            radius: 0.018;
             sag: 0.035;
             updateInterval: 10;
         "></a-entity>
