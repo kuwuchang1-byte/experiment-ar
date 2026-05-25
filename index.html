@@ -248,12 +248,22 @@
                 if (!model || !model.object3D) return;
                 model.object3D.updateMatrixWorld(true);
 
+                // 调试：列出模型里所有对象名
+                const listAll = (obj, depth = 0) => {
+                    const prefix = '  '.repeat(depth);
+                    console.log(prefix + obj.type + ': ' + obj.name + (obj.isMesh ? ' [mesh]' : ''));
+                    if (obj.children) obj.children.forEach(c => listAll(c, depth + 1));
+                };
+                console.log('[mf-control] === 模型对象列表 ===');
+                listAll(model.object3D);
+                console.log('[mf-control] === 列表结束 ===');
+
                 const parse = (s) => s.split(',').map(n => n.trim()).filter(n => n);
                 const find = (names) => {
                     const result = [];
                     names.forEach(name => {
                         const obj = model.object3D.getObjectByName(name);
-                        if (obj) { result.push(obj); console.log('[mf-control] found:', name); }
+                        if (obj) { result.push(obj); console.log('[mf-control] found:', name, obj.type); }
                         else { console.warn('[mf-control] NOT found:', name); }
                     });
                     return result;
