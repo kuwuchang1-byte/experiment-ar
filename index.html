@@ -30,7 +30,7 @@
         }
     </style>
     <script>
-        // 跨识别图动态导线组件：读取 Blender 导出的空物体接线点，并用 TubeGeometry 生成有宽度导线。
+        // 跨识别图动态导线组件 v3：空物体 → 模型中心兜底 + 端点圆球调试 + 明显粗导线
         AFRAME.registerComponent('ar-wire', {
             schema: {
                 fromTarget: { type: 'selector' },
@@ -40,17 +40,24 @@
                 fromTerminal: { type: 'string' },
                 toTerminal: { type: 'string' },
                 color: { type: 'color', default: '#222222' },
-                radius: { type: 'number', default: 0.006 },
+                radius: { type: 'number', default: 0.04 },
                 sag: { type: 'number', default: 0.035 },
                 segments: { type: 'number', default: 24 },
-                updateInterval: { type: 'number', default: 10 },
-                smooth: { type: 'number', default: 0.35 }
+                updateInterval: { type: 'number', default: 6 },
+                smooth: { type: 'number', default: 0.3 }
             },
 
             init: function () {
                 this.frameCount = 0;
                 this.mesh = null;
-                this.material = new THREE.MeshBasicMaterial({
+                this.startSphere = null;
+                this.endSphere = null;
+                this.wireMaterial = new THREE.MeshBasicMaterial({
+                    color: this.data.color,
+                    depthTest: false,
+                    depthWrite: false
+                });
+                this.sphereMaterial = new THREE.MeshBasicMaterial({
                     color: this.data.color,
                     depthTest: false,
                     depthWrite: false
@@ -62,16 +69,27 @@
                 this.mid = new THREE.Vector3();
                 this.fromFound = false;
                 this.toFound = false;
+                this.foundEmpty = false; // 调试：是否找到空物体
 
-                // MindAR 的 object3D.visible 在多目标时有时不稳定，改用 targetFound / targetLost 事件记录。
+                // 监听识别事件
                 const bindTargetEvents = () => {
                     if (this.data.fromTarget) {
                         this.data.fromTarget.addEventListener('targetFound', () => { this.fromFound = true; });
-                        this.data.fromTarget.addEventListener('targetLost', () => { this.fromFound = false; this.setWireVisible(false); });
+                        this.data.fromTarget.addEventListener('targetLost', () => {
+                            this.fromFound = false;
+                            this.setAllVisible(false);
+                            this.lastFrom = null;
+                            this.lastTo = null;
+                        });
                     }
                     if (this.data.toTarget) {
                         this.data.toTarget.addEventListener('targetFound', () => { this.toFound = true; });
-                        this.data.toTarget.addEventListener('targetLost', () => { this.toFound = false; this.setWireVisible(false); });
+                        this.data.toTarget.addEventListener('targetLost', () => {
+                            this.toFound = false;
+                            this.setAllVisible(false);
+                            this.lastFrom = null;
+                            this.lastTo = null;
+                        });
                     }
                 };
                 setTimeout(bindTargetEvents, 0);
@@ -87,32 +105,40 @@
                 const toModel = this.data.toModel;
 
                 if (!fromTarget || !toTarget || !fromModel || !toModel) {
-                    this.setWireVisible(false);
+                    this.setAllVisible(false);
                     return;
                 }
 
-                // 两个识别图都被追踪到时才显示导线。
-                // 同时兼容事件状态和 object3D.visible，避免不同手机浏览器表现不一致。
                 const fromVisible = this.fromFound || fromTarget.object3D.visible;
                 const toVisible = this.toFound || toTarget.object3D.visible;
                 if (!fromVisible || !toVisible) {
-                    this.setWireVisible(false);
+                    this.setAllVisible(false);
                     return;
                 }
 
                 fromModel.object3D.updateMatrixWorld(true);
                 toModel.object3D.updateMatrixWorld(true);
 
+                // 先尝试找空物体接线点
                 const fromTerminal = fromModel.object3D.getObjectByName(this.data.fromTerminal);
                 const toTerminal = toModel.object3D.getObjectByName(this.data.toTerminal);
 
-                if (!fromTerminal || !toTerminal) {
-                    this.setWireVisible(false);
-                    return;
+                if (fromTerminal && toTerminal) {
+                    fromTerminal.getWorldPosition(this.tempFrom);
+                    toTerminal.getWorldPosition(this.tempTo);
+                    if (!this.foundEmpty) {
+                        this.foundEmpty = true;
+                        console.log('[ar-wire] 空物体已找到:', this.data.fromTerminal, '->', this.data.toTerminal);
+                    }
+                } else {
+                    // 兜底：用模型自身的中心位置
+                    this.tempFrom.copy(fromModel.object3D.getWorldPosition(new THREE.Vector3()));
+                    this.tempTo.copy(toModel.object3D.getWorldPosition(new THREE.Vector3()));
+                    if (this.foundEmpty !== false) {
+                        this.foundEmpty = false;
+                        console.warn('[ar-wire] 空物体未找到，使用模型中心兜底:', this.data.fromTerminal, this.data.toTerminal);
+                    }
                 }
-
-                fromTerminal.getWorldPosition(this.tempFrom);
-                toTerminal.getWorldPosition(this.tempTo);
 
                 if (!this.lastFrom) {
                     this.lastFrom = this.tempFrom.clone();
@@ -128,29 +154,56 @@
                     (this.lastFrom.z + this.lastTo.z) / 2
                 );
 
+                // 导线本体
                 const curve = new THREE.QuadraticBezierCurve3(this.lastFrom, this.mid, this.lastTo);
                 const geometry = new THREE.TubeGeometry(curve, this.data.segments, this.data.radius, 8, false);
-
                 if (this.mesh) {
                     this.mesh.geometry.dispose();
                     this.mesh.geometry = geometry;
-                    this.mesh.visible = true;
                 } else {
-                    this.mesh = new THREE.Mesh(geometry, this.material);
+                    this.mesh = new THREE.Mesh(geometry, this.wireMaterial);
                     this.mesh.renderOrder = 20;
                     this.el.object3D.add(this.mesh);
                 }
+                this.mesh.visible = true;
+
+                // 端点圆球：方便确认连线位置
+                const sphereGeo = new THREE.SphereGeometry(this.data.radius * 3, 8, 8);
+                if (this.startSphere) {
+                    this.startSphere.geometry.dispose();
+                    this.startSphere.geometry = sphereGeo;
+                    this.startSphere.position.copy(this.lastFrom);
+                } else {
+                    this.startSphere = new THREE.Mesh(sphereGeo, this.sphereMaterial);
+                    this.startSphere.position.copy(this.lastFrom);
+                    this.startSphere.renderOrder = 21;
+                    this.el.object3D.add(this.startSphere);
+                }
+                this.startSphere.visible = true;
+
+                if (this.endSphere) {
+                    this.endSphere.geometry.dispose();
+                    this.endSphere.geometry = sphereGeo;
+                    this.endSphere.position.copy(this.lastTo);
+                } else {
+                    this.endSphere = new THREE.Mesh(sphereGeo, this.sphereMaterial);
+                    this.endSphere.position.copy(this.lastTo);
+                    this.endSphere.renderOrder = 21;
+                    this.el.object3D.add(this.endSphere);
+                }
+                this.endSphere.visible = true;
             },
 
-            setWireVisible: function (visible) {
+            setAllVisible: function (visible) {
                 if (this.mesh) this.mesh.visible = visible;
+                if (this.startSphere) this.startSphere.visible = visible;
+                if (this.endSphere) this.endSphere.visible = visible;
             },
 
             remove: function () {
-                if (this.mesh) {
-                    this.mesh.geometry.dispose();
-                    this.material.dispose();
-                }
+                if (this.mesh) { this.mesh.geometry.dispose(); this.wireMaterial.dispose(); }
+                if (this.startSphere) { this.startSphere.geometry.dispose(); }
+                if (this.endSphere) { this.endSphere.geometry.dispose(); this.sphereMaterial.dispose(); }
             }
         });
     </script>
@@ -214,9 +267,9 @@
             fromTerminal: box_transmit_out_red;
             toTerminal: coil_transmit_in_red;
             color: #cc2020;
-            radius: 0.018;
+            radius: 0.04;
             sag: 0.04;
-            updateInterval: 10;
+            updateInterval: 6;
         "></a-entity>
 
         <!-- 动态导线：发射端黑线，黑箱输入- -> 发射线圈输出 -->
@@ -228,9 +281,9 @@
             fromTerminal: box_transmit_in_black;
             toTerminal: coil_transmit_out_black;
             color: #111111;
-            radius: 0.018;
+            radius: 0.04;
             sag: 0.035;
-            updateInterval: 10;
+            updateInterval: 6;
         "></a-entity>
 
         <!-- 动态导线：接收端红线，接收线圈输出 -> 黑箱2正极输入 -->
@@ -242,9 +295,9 @@
             fromTerminal: coil_receive_out_red;
             toTerminal: box_receive_in_red;
             color: #cc2020;
-            radius: 0.018;
+            radius: 0.04;
             sag: 0.04;
-            updateInterval: 10;
+            updateInterval: 6;
         "></a-entity>
 
         <!-- 动态导线：接收端黑线，接收线圈输入 -> 黑箱2负极输出 -->
@@ -256,9 +309,9 @@
             fromTerminal: coil_receive_in_black;
             toTerminal: box_receive_out_black;
             color: #111111;
-            radius: 0.018;
+            radius: 0.04;
             sag: 0.035;
-            updateInterval: 10;
+            updateInterval: 6;
         "></a-entity>
     </a-scene>
     <script>
