@@ -55,6 +55,21 @@
                 this.tempFrom = new THREE.Vector3();
                 this.tempTo = new THREE.Vector3();
                 this.mid = new THREE.Vector3();
+                this.fromFound = false;
+                this.toFound = false;
+
+                // MindAR 的 object3D.visible 在多目标时有时不稳定，改用 targetFound / targetLost 事件记录。
+                const bindTargetEvents = () => {
+                    if (this.data.fromTarget) {
+                        this.data.fromTarget.addEventListener('targetFound', () => { this.fromFound = true; });
+                        this.data.fromTarget.addEventListener('targetLost', () => { this.fromFound = false; this.setWireVisible(false); });
+                    }
+                    if (this.data.toTarget) {
+                        this.data.toTarget.addEventListener('targetFound', () => { this.toFound = true; });
+                        this.data.toTarget.addEventListener('targetLost', () => { this.toFound = false; this.setWireVisible(false); });
+                    }
+                };
+                setTimeout(bindTargetEvents, 0);
             },
 
             tick: function () {
@@ -72,7 +87,10 @@
                 }
 
                 // 两个识别图都被追踪到时才显示导线。
-                if (!fromTarget.object3D.visible || !toTarget.object3D.visible) {
+                // 同时兼容事件状态和 object3D.visible，避免不同手机浏览器表现不一致。
+                const fromVisible = this.fromFound || fromTarget.object3D.visible;
+                const toVisible = this.toFound || toTarget.object3D.visible;
+                if (!fromVisible || !toVisible) {
                     this.setWireVisible(false);
                     return;
                 }
@@ -154,7 +172,7 @@
 
         <!-- 实测 targetIndex 0: 接收线圈 -->
         <a-entity id="target-coil-receive" mindar-image-target="targetIndex: 0">
-            <a-gltf-model id="model-coil-receive" src="#asset-coil-receive" position="0 0 0" scale="0.375 0.375 0.375"></a-gltf-model>
+            <a-gltf-model id="model-coil-receive" src="#asset-coil-receive" position="0 0 0" scale="0.12 0.12 0.12"></a-gltf-model>
         </a-entity>
 
         <!-- 实测 targetIndex 1: 暂时留空 -->
@@ -162,7 +180,7 @@
 
         <!-- 实测 targetIndex 2: 电源 + 发射端黑箱 -->
         <a-entity id="target-box-transmit" mindar-image-target="targetIndex: 2">
-            <a-gltf-model id="model-box-transmit" src="#asset-box-transmit" position="0 0 0" scale="0.0225 0.0225 0.0225"></a-gltf-model>
+            <a-gltf-model id="model-box-transmit" src="#asset-box-transmit" position="0 0 0" scale="0.045 0.045 0.045"></a-gltf-model>
         </a-entity>
 
         <!-- 实测 targetIndex 3: 接收端黑箱 -->
@@ -175,7 +193,7 @@
 
         <!-- 实测 targetIndex 5: 发射线圈 -->
         <a-entity id="target-coil-transmit" mindar-image-target="targetIndex: 5">
-            <a-gltf-model id="model-coil-transmit" src="#asset-coil-transmit" position="0 0 0" scale="0.27 0.27 0.27"></a-gltf-model>
+            <a-gltf-model id="model-coil-transmit" src="#asset-coil-transmit" position="0 0 0" scale="0.09 0.09 0.09"></a-gltf-model>
         </a-entity>
 
         <!-- 动态导线：发射端红线，黑箱输出+ -> 发射线圈输入 -->
